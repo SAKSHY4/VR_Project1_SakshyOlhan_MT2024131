@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Test Script for U-Net Segmentation Evaluation
 
@@ -16,7 +15,6 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, concatenate, Conv2DTranspose, Dropout
 from tensorflow.keras.optimizers import Adam
 
-# Define constants and paths
 IMG_SIZE = 128
 FACE_CROP_DIR = '/workspace/MSFD/1/face_crop'
 GROUND_TRUTH_DIR = '/workspace/MSFD/1/face_crop_segmentation'
@@ -63,7 +61,6 @@ def build_unet_model():
     c7 = Conv2D(16, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(u7)
     c7 = Conv2D(16, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(c7)
     
-    # Output layer
     outputs = Conv2D(1, (1, 1), activation='sigmoid')(c7)
     
     model = Model(inputs=[inputs], outputs=[outputs])
@@ -71,29 +68,23 @@ def build_unet_model():
                   loss='binary_crossentropy',
                   metrics=['accuracy', tf.keras.metrics.IoU(num_classes=2, target_class_ids=[1])])
     
-    # Uncomment the next line if you want to see the model summary
-    # model.summary()
-    
     return model
 
 def preprocess_image(image_path):
-    """Load and preprocess an image."""
     img = cv2.imread(image_path)
     if img is None:
         print(f"Error: Unable to read image {image_path}")
         return None
     img = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
-    # Normalize to [0,1]
+    # Normalize
     img = img.astype('float32') / 255.0
     return img
 
 def compute_metrics(segmented, ground_truth):
-    """Compute IoU, Dice, Precision, Recall, and F1-Score."""
     # Ensure both masks are the same size
     if segmented.shape != ground_truth.shape:
         segmented = cv2.resize(segmented, (ground_truth.shape[1], ground_truth.shape[0]), interpolation=cv2.INTER_NEAREST)
     
-    # Convert to boolean arrays
     segmented = segmented.astype(bool)
     ground_truth = ground_truth.astype(bool)
     
@@ -108,12 +99,10 @@ def compute_metrics(segmented, ground_truth):
     
     return iou, dice, precision, recall, f1_score
 
-# Load the U-Net model and weights
 model = build_unet_model()
 model.load_weights(WEIGHTS_PATH)
 print("U-Net model loaded with weights.")
 
-# Process images
 image_files = sorted([f for f in os.listdir(FACE_CROP_DIR) if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
 metrics_list = []
 
@@ -130,10 +119,8 @@ for image_name in image_files:
     # Convert to binary mask using threshold 0.5
     pred_mask = (pred_mask > 0.5).astype(np.uint8) * 255
     
-    # Save predicted mask
     cv2.imwrite(os.path.join(OUTPUT_DIR, image_name), pred_mask)
     
-    # Load ground truth mask
     if not os.path.exists(gt_path):
         print(f"Ground truth for {image_name} not found. Skipping metrics.")
         continue
@@ -141,21 +128,17 @@ for image_name in image_files:
     if gt_mask is None:
         print(f"Error reading ground truth mask for {image_name}.")
         continue
-    # Convert to binary mask (assuming nonzero indicates mask)
     gt_mask = (gt_mask > 0).astype(np.uint8) * 255
     
-    # Compute evaluation metrics
     iou, dice, precision, recall, f1_score = compute_metrics(pred_mask, gt_mask)
     metrics_list.append([image_name, iou, dice, precision, recall, f1_score])
     
     print(f"{image_name} - IoU: {iou:.4f}, Dice: {dice:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1-Score: {f1_score:.4f}")
 
-# Save evaluation metrics to CSV
 metrics_df = pd.DataFrame(metrics_list, columns=["Image", "IoU", "Dice", "Precision", "Recall", "F1-Score"])
 metrics_csv_path = os.path.join(OUTPUT_DIR, "unet_evaluation_metrics.csv")
 metrics_df.to_csv(metrics_csv_path, index=False)
 
-# Compute and print average metrics
 avg_iou = metrics_df["IoU"].mean()
 avg_dice = metrics_df["Dice"].mean()
 avg_precision = metrics_df["Precision"].mean()

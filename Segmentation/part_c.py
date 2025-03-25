@@ -3,19 +3,16 @@ import numpy as np
 import pandas as pd
 import os
 
-# Path to Haar cascade file (update the path if needed)
 face_cascade_path = '/workspace/MSFD/1/haarcascade_frontalface_default.xml'
 face_cascade = cv2.CascadeClassifier(face_cascade_path)
 
 def load_dataset(csv_path):
-    """Load dataset CSV to check if an image has a mask."""
     if not os.path.isfile(csv_path):
         print(f"Error: File not found at {csv_path}")
         return None
     return pd.read_csv(csv_path)
 
 def process_image(image_path):
-    """Read and preprocess an image."""
     image = cv2.imread(image_path)
     if image is None:
         print(f"Error: Could not read image at {image_path}")
@@ -25,18 +22,15 @@ def process_image(image_path):
     return image, blurred
 
 def detect_face(image):
-    """Detect faces in the image using Haar cascades."""
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
     return faces
 
 def apply_threshold(region):
-    """Apply Otsu's thresholding on a given region."""
     _, binary = cv2.threshold(region, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     return binary
 
 def segment_mask_region(binary):
-    """Find and extract mask region using contours."""
     contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     mask = np.zeros_like(binary)
     
@@ -52,12 +46,10 @@ def segment_mask_region(binary):
     return mask
 
 def compute_metrics(segmented, ground_truth):
-    """Compute IoU, Dice Coefficient, Precision, Recall, and F1-Score."""
     # Resize segmented mask to match ground truth if needed.
     if segmented.shape != ground_truth.shape:
         segmented = cv2.resize(segmented, (ground_truth.shape[1], ground_truth.shape[0]), interpolation=cv2.INTER_NEAREST)
     
-    # Convert to boolean arrays
     segmented = segmented.astype(bool)
     ground_truth = ground_truth.astype(bool)
     
@@ -73,7 +65,6 @@ def compute_metrics(segmented, ground_truth):
     return iou, dice, precision, recall, f1_score
 
 def process_images(input_dir, dataset_csv, sample_count=12000, show_images=False):
-    """Main function to process images. It detects a face and thresholds the lower half of the face."""
     output_dir = os.path.join(os.path.dirname(input_dir), "result")
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -100,18 +91,16 @@ def process_images(input_dir, dataset_csv, sample_count=12000, show_images=False
         if image is None or blurred is None:
             continue
         
-        # Detect face(s) in the image
         faces = detect_face(image)
         full_mask = np.zeros_like(blurred)  # Create a blank mask of full image size
         
         if len(faces) > 0:
-            # Here we choose the first detected face.
+            # Here we choose the first detected face (alternate approach where input image was not cropped for faces).
             (x, y, w, h) = faces[0]
             # Define the lower half of the detected face:
             lower_y = y + h // 2
             lower_half = blurred[lower_y:y+h, x:x+w]
             
-            # Apply thresholding and segmentation on the lower half
             binary_lower = apply_threshold(lower_half)
             mask_lower = segment_mask_region(binary_lower)
             
@@ -125,7 +114,6 @@ def process_images(input_dir, dataset_csv, sample_count=12000, show_images=False
         output_path = os.path.join(output_dir, image_name)
         cv2.imwrite(output_path, full_mask)
         
-        # Set your ground truth directory here.
         ground_truth_dir = '/workspace/MSFD/1/face_crop_segmentation'
         ground_truth_path = os.path.join(ground_truth_dir, image_name)
 
@@ -153,14 +141,12 @@ def process_images(input_dir, dataset_csv, sample_count=12000, show_images=False
         metrics_df = pd.DataFrame(metrics_list, columns=["Image", "IoU", "Dice", "Precision", "Recall", "F1-Score"])
     metrics_df.to_csv(os.path.join(output_dir, "evaluation_metrics.csv"), index=False)
 
-    # Compute average metrics
     average_iou = metrics_df["IoU"].mean()
     average_dice = metrics_df["Dice"].mean()
     average_precision = metrics_df["Precision"].mean()
     average_recall = metrics_df["Recall"].mean()
     average_f1_score = metrics_df["F1-Score"].mean()
 
-    # Print average metrics
     print(f"Average IoU: {average_iou:.4f}")
     print(f"Average Dice: {average_dice:.4f}")
     print(f"Average Precision: {average_precision:.4f}")
